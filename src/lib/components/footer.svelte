@@ -8,7 +8,7 @@
 </script>
 
 <section id="contact" class="section contact">
-    <h2 class="section-title"><span class="num">05.</span> Contact</h2>
+    <h2 class="section-title">Contact</h2>
     <div class="cta">
         <p class="big">Have a role, a project, or a CTF team that needs another player?</p>
         <p>My inbox is open. I usually reply within a day or two.</p>
@@ -16,7 +16,6 @@
         <div class="socials">
             <a href={profile.github} target="_blank" rel="noopener" aria-label="GitHub"><Fa icon={faGithub} size="lg" /></a>
             <a href={profile.linkedin} target="_blank" rel="noopener" aria-label="LinkedIn"><Fa icon={faLinkedin} size="lg" /></a>
-            <a href={profile.resume} target="_blank" rel="noopener" aria-label="Résumé"><Fa icon={faFileLines} size="lg" /></a>
         </div>
     </div>
 </section>
@@ -25,12 +24,11 @@
     <p>
         Shoutouts:
         {#each shoutouts as s, i}
-            <a href={s.link} target="_blank" rel="noopener">{s.name}</a>{i < shoutouts.length - 1 ? " · " : ""}
+            <a href={s.link} target="_blank" rel="noopener">{s.name}</a>{i < shoutouts.length - 1 ? " - " : ""}
         {/each}
     </p>
     <p>
-        © {year} {profile.name} · Built with SvelteKit ·
-        <a href="https://github.com/BrendanGlancy/dev-port" target="_blank" rel="noopener">Source</a>
+        © {year} {profile.name} - The Syncer X
     </p>
 </footer>
 

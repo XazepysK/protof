@@ -3,7 +3,7 @@
 </script>
 
 <section id="pipeline" class="section">
-    <h2 class="section-title"><span class="num">03.</span> AI-assisted workflow</h2>
+    <h2 class="section-title">AI-assisted workflow</h2>
     <p class="lede">{pipeline.intro}</p>
 
     <ol class="stages">

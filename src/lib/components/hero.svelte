@@ -1,173 +1,149 @@
 <script>
     import { onMount } from "svelte";
     import { profile } from "$lib/data.js";
-    /**
-      1. var scroll_yv = (scroll.y - scroll.py) * 0.5;
-        - The 0.5 multiplier dampens the scroll velocity
-        - Increase this to make water move faster (e.g., 1.0 or 2.0)
-        - Decrease this to make it slower (e.g., 0.2 or 0.3)
-      2. if (Math.abs(scroll_yv) > 0.01)
-        - The 0.01 threshold determines how sensitive it is to small scrolls
-        - Lower this to respond to gentler scrolling
-      3. The wave offset multiplier * 0.5
-        - Controls the horizontal wave intensity
-        - Increase for more dramatic side-to-side motion
-      4. cell_data.xv *= 0.99; cell_data.yv *= 0.99;
-        - These are the existing velocity decay values
-        - They make the water slow down over time
-        - Lower values (e.g., 0.95) = faster slowdown
-        - Higher values (e.g., 0.995) = water flows longer
-     */
 
     var canvas, ctx, container;
-    var mouse = {
-        x: 0,
-        y: 0,
-        px: 0,
-        py: 0,
-        down: false,
-    };
-    var scroll = {
-        y: 0,
-        py: 0,
-    };
-    // need to be a multiple of resolution
-    var canvas_width = 500;
-    var canvas_height = 500;
-    var resolution = 20;
-    var pen_size = 50;
+    var W = 500, H = 500, maxR = 200;
+    var stars = [];
+    var sim = 0;
+    var rotX = 0, rotY = 0, tRotX = 0, tRotY = 0;
+    var mxp = -9999, myp = -9999, hover = false;
+    var raf = 0, visible = true, observer = null, reduced = false;
 
-    var num_cols = 0;
-    var num_rows = 0;
-    var speck_count = 1000;
-
-    var vec_cells = [];
-    var particles = [];
-
-    function initalizeGrid() {
-        vec_cells = [];
-        particles = [];
-
-        num_cols = Math.floor(canvas_width / resolution);
-        num_rows = Math.floor(canvas_height / resolution);
-
-        for (let i = 0; i < speck_count; i++) {
-            particles.push(
-                new particle(
-                    Math.random() * canvas_width,
-                    Math.random() * canvas_height,
-                ),
-            );
-        }
-
-        for (let col = 0; col < num_cols; col++) {
-            vec_cells[col] = [];
-
-            for (let row = 0; row < num_rows; row++) {
-                var cell_data = new cell(
-                    col * resolution,
-                    row * resolution,
-                    resolution,
-                );
-                vec_cells[col][row] = cell_data;
-                vec_cells[col][row].col = col;
-                vec_cells[col][row].row = row;
+    function initGalaxy() {
+        stars = [];
+        maxR = Math.min(W, H) * 3;
+        var n = Math.min(3600, Math.max(1200, Math.round((W * H) / 280)));
+        for (var i = 0; i < n; i++) {
+            var x, y, z, r, g, b, s;
+            if (i < n * 0.18) {
+                var rr = Math.pow(Math.random(), 1.7) * maxR * 0.28;
+                var a = Math.random() * Math.PI * 2;
+                var p = Math.pow(Math.random(), 0.6);
+                x = Math.cos(a) * rr * p;
+                z = Math.sin(a) * rr * p;
+                y = (Math.random() - 0.5) * maxR * 0.14 * (1 - p * 0.5);
+                r = 255; g = 250 - Math.random() * 25; b = 235 - Math.random() * 35;
+                s = 0.9 + Math.random() * 2.2;
+            } else {
+                var arm = i % 3;
+                var d = Math.pow(Math.random(), 0.72);
+                var radius = d * maxR;
+                var ang = (arm / 3) * Math.PI * 2 + d * 4.4 + (Math.random() - 0.5) * (0.25 + (1 - d) * 0.55);
+                x = Math.cos(ang) * radius + (Math.random() - 0.5) * maxR * 0.09;
+                z = Math.sin(ang) * radius + (Math.random() - 0.5) * maxR * 0.09;
+                y = (Math.random() - 0.5) * maxR * (0.05 + 0.13 * (1 - d));
+                if (d < 0.3) { r = 255; g = 215 + Math.random() * 35; b = 245 - Math.random() * 40; }
+                else if (d < 0.65) { r = 195 + Math.random() * 45; g = 150 + Math.random() * 55; b = 255; }
+                else { r = 140 + Math.random() * 55; g = 175 + Math.random() * 55; b = 255; }
+                if (Math.random() > 0.93) { r = 235; g = 245; b = 255; }
+                s = (Math.random() > 0.93 ? 1.4 : 0.45) + Math.random() * 1.5;
             }
-        }
-
-        for (let col = 0; col < num_cols; col++) {
-            for (let row = 0; row < num_rows; row++) {
-                cell_data = vec_cells[col][row];
-
-                var row_up = row - 1 >= 0 ? row - 1 : num_rows - 1;
-                var col_left = col - 1 >= 0 ? col - 1 : num_cols - 1;
-                var col_right = col + 1 < num_cols ? col + 1 : 0;
-
-                // refs to the cell and row above
-                var up = vec_cells[col][row_up];
-                var left = vec_cells[col_left][row];
-                var up_left = vec_cells[col_left][row_up];
-                var up_right = vec_cells[col_right][row_up];
-
-                // set the current cells up, left, up_left, and up_right attributes to the neighboring cells
-                cell_data.up = up;
-                cell_data.left = left;
-                cell_data.up_left = up_left;
-                cell_data.up_right = up_right;
-
-                // Set the neighboring cell's opposite attributes to point to the current cell
-                up.down = vec_cells[col][row];
-                left.right = vec_cells[col][row];
-                up_left.down_right = vec_cells[col][row];
-                up_right.down_left = vec_cells[col][row];
-            }
+            stars.push({ x: x, y: y, z: z, r: r, g: g, b: b, s: s, ph: Math.random() * Math.PI * 2, sp: 0.35 + Math.random() * 1.5 });
         }
     }
 
-    function resizeCanvas() {
-        const rect = container.getBoundingClientRect();
-        // Mobile browsers fire resize when the URL bar shows/hides; only rebuild on a real size change.
-        if (rect.width === canvas_width && rect.height === canvas_height && vec_cells.length) return;
-        canvas_width = rect.width;
-        canvas_height = rect.height;
+    function draw() {
+        var bg = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.04, W / 2, H / 2, Math.max(W, H) * 0.9);
+        bg.addColorStop(0, "#0a1026");
+        bg.addColorStop(0.45, "#050713");
+        bg.addColorStop(1, "#010208");
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, W, H);
 
-        // Keep particle density roughly constant instead of packing the desktop count
-        // into a phone-sized canvas: ~500 on a 390x844 phone, 1000 from ~650k px² up.
-        speck_count = Math.max(300, Math.min(1000, Math.round((canvas_width * canvas_height) / 650)));
+        var neb = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, maxR * 1.5);
+        neb.addColorStop(0, "rgba(130, 90, 190, 0.16)");
+        neb.addColorStop(0.45, "rgba(70, 45, 150, 0.08)");
+        neb.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = neb;
+        ctx.fillRect(0, 0, W, H);
 
-        // Render at device resolution so the 1px strokes stay sharp on retina screens.
+        var ry = sim * 0.085 + rotY;
+        var rx = 1.0 + rotX;
+        var cy = Math.cos(ry), sy = Math.sin(ry);
+        var cxr = Math.cos(rx), sxr = Math.sin(rx);
+        var fov = Math.min(W, H) * 0.35;
+        var mx = W / 2, my = H / 2;
+        var avoidR = Math.min(W, H) * 0.18
+
+        ctx.globalCompositeOperation = "lighter";
+        for (var i = 0; i < stars.length; i++) {
+            var p = stars[i];
+            var x1 = p.x * cy - p.z * sy;
+            var z1 = p.x * sy + p.z * cy;
+            var y1 = p.y * cxr - z1 * sxr;
+            var z2 = p.y * sxr + z1 * cxr;
+            var sc = fov / (fov + z2 + maxR * 0.5);
+            if (sc <= 0) continue;
+            var px = mx + x1 * sc;
+            var py = my + y1 * sc;
+            if (hover) {
+                var dx = px - mxp, dy = py - myp;
+                var d2 = dx * dx + dy * dy;
+                if (d2 < avoidR * avoidR && d2 > 0.01) {
+                    var d = Math.sqrt(d2);
+                    var force = (1 - d / avoidR);
+                    var push = force * force * avoidR * 0.30;
+                    px += (dx / d) * push;
+                    py += (dy / d) * push;
+                }
+            }
+            if (px < -40 || px > W + 40 || py < -40 || py > H + 40) continue;
+            var depth = Math.max(0, Math.min(1, (z2 + maxR) / (2.3 * maxR)));
+            var tw = 0.6 + 0.4 * Math.sin(sim * p.sp + p.ph);
+            ctx.globalAlpha = (0.12 + (1 - depth) * 0.88) * tw;
+            ctx.fillStyle = "rgb(" + (p.r | 0) + "," + (p.g | 0) + "," + (p.b | 0) + ")";
+            ctx.beginPath();
+            ctx.arc(px, py, Math.max(0.2, p.s * sc * 2.8), 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalCompositeOperation = "source-over";
+        ctx.globalAlpha = 1;
+    }
+
+    function frame() {
+        sim += 1 / 60;
+        rotX += (tRotX - rotX) * 0.045;
+        rotY += (tRotY - rotY) * 0.045;
+        draw();
+        raf = visible ? requestAnimationFrame(frame) : 0;
+    }
+
+    function start() { if (!raf && !reduced) raf = requestAnimationFrame(frame); }
+    function stop() { cancelAnimationFrame(raf); raf = 0; }
+
+    function onMove(e) {
+        var r = container.getBoundingClientRect();
+        mxp = e.clientX - r.left;
+        myp = e.clientY - r.top;
+        hover = true;
+        tRotY = ((mxp / r.width) - 0.5) * 1.6;
+        tRotX = ((myp / r.height) - 0.5) * 0.65;
+    }
+    function onLeave() { tRotY = 0; tRotX = 0; hover = false; mxp = -9999; myp = -9999; }
+
+    function resize() {
+        var r = container.getBoundingClientRect();
+        if (r.width === W && r.height === H && stars.length) return;
+        W = r.width; H = r.height;
         var dpr = Math.min(window.devicePixelRatio || 1, 2);
-        canvas.width = Math.round(canvas_width * dpr);
-        canvas.height = Math.round(canvas_height * dpr);
+        canvas.width = Math.round(W * dpr);
+        canvas.height = Math.round(H * dpr);
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        ctx.lineWidth = 1;
-
-        initalizeGrid();
-    }
-
-    var raf = 0;
-    var visible = true;
-    var observer = null;
-    var reduced_motion = false;
-
-    function start() {
-        if (raf || reduced_motion) return;
-        scroll.py = scroll.y; // don't replay scrolling that happened while paused
-        raf = requestAnimationFrame(draw);
-    }
-
-    function stop() {
-        cancelAnimationFrame(raf);
-        raf = 0;
+        initGalaxy();
     }
 
     function init() {
         canvas = document.getElementById("c");
         container = document.querySelector(".hero-container");
         ctx = canvas.getContext("2d");
-
-        resizeCanvas();
-        scroll.y = scroll.py = window.scrollY;
-
-        window.addEventListener("resize", resizeCanvas);
-        // Listen on the hero only and stay passive, so taps and page scrolling keep working on touch devices.
-        container.addEventListener("mousemove", mouse_move_handler);
-        container.addEventListener("mouseleave", mouse_up_handler);
-        container.addEventListener("touchstart", touch_start_handler, { passive: true });
-        container.addEventListener("touchmove", touch_move_handler, { passive: true });
-        container.addEventListener("touchend", touch_end_handler);
-        container.addEventListener("touchcancel", touch_end_handler);
-        window.addEventListener("scroll", scroll_handler, { passive: true });
-
-        if (reduced_motion) {
-            // One still frame of the particle field, no animation loop.
-            draw_frame();
-            return;
-        }
-
-        // Only animate while the hero is on screen.
-        observer = new IntersectionObserver(([entry]) => {
-            visible = entry.isIntersecting;
+        resize();
+        window.addEventListener("resize", resize);
+        if (reduced) { draw(); return; }
+        container.addEventListener("pointermove", onMove);
+        container.addEventListener("pointerleave", onLeave);
+        observer = new IntersectionObserver(function (e) {
+            visible = e[0].isIntersecting;
             visible ? start() : stop();
         });
         observer.observe(container);
@@ -177,291 +153,15 @@
     function teardown() {
         stop();
         if (observer) observer.disconnect();
-        window.removeEventListener("resize", resizeCanvas);
-        window.removeEventListener("scroll", scroll_handler);
-        if (!container) return;
-        container.removeEventListener("mousemove", mouse_move_handler);
-        container.removeEventListener("mouseleave", mouse_up_handler);
-        container.removeEventListener("touchstart", touch_start_handler);
-        container.removeEventListener("touchmove", touch_move_handler);
-        container.removeEventListener("touchend", touch_end_handler);
-        container.removeEventListener("touchcancel", touch_end_handler);
-    }
-
-    function update_particle() {
-        for (let i = 0; i < particles.length; i++) {
-            var p = particles[i];
-
-            if (
-                p.x >= 0 &&
-                p.x < canvas_width &&
-                p.y >= 0 &&
-                p.y < canvas_height
-            ) {
-                var col = Math.floor(p.x / resolution);
-                var row = Math.floor(p.y / resolution);
-
-                col = Math.min(col, num_cols - 1);
-                row = Math.min(row, num_rows - 1);
-
-                var cell_data = vec_cells[col][row];
-
-                // These values are percentages, distance across the cell a particle is positioned
-                var ax = (p.x % resolution) / resolution;
-                var ay = (p.y % resolution) / resolution;
-
-                /*
-                    eg: 100% - 75% = 25%,
-                    multiply that value by the cells velocity,
-                    then by 0.05 to greatly reduce the overall change in velocity
-                    then add that value to the particles velocity in each axis
-
-                    this is done so that the change is velocity is incrementatlly made as the particle reaches the end of it's path across the cell
-                */
-                p.xv += (1 - ax) * cell_data.xv * 0.05;
-                p.yv += (1 - ay) * cell_data.yv * 0.05;
-
-                p.xv += (1 - ax) * cell_data.right.xv * 0.05;
-                p.yv += (1 - ay) * cell_data.right.yv * 0.05;
-
-                p.xv += (1 - ax) * cell_data.down.xv * 0.05;
-                p.yv += (1 - ay) * cell_data.down.yv * 0.05;
-
-                p.x += p.xv;
-                p.y += p.yv;
-
-                // distance between old position of particle and its new position
-                var dx = p.px - p.x;
-                var dy = p.py - p.y;
-
-                // a^2 + b^2 = c^2
-                var dist = Math.sqrt(dx * dx + dy * dy);
-                var limit = Math.random() * 0.5;
-
-                // All particles go into one path, stroked once per frame (see draw_frame).
-                if (dist > limit) {
-                    ctx.moveTo(p.x, p.y);
-                    ctx.lineTo(p.px, p.py);
-                } else {
-                    ctx.moveTo(p.x, p.y);
-
-                    /*
-                     draw a line from the particles current coordindates to the same coords
-                     creates a shimmering effect while the particles aren't moving
-                    */
-                    ctx.lineTo(p.x + limit, p.y + limit);
-                }
-
-                // update the prev x and y coords to new ones for next loop
-                p.px = p.x;
-                p.py = p.y;
-            } else {
-                // if the particles x and y are out of bonds
-                p.x = p.px = Math.random() * canvas_width;
-                p.y = p.py = Math.random() * canvas_height;
-
-                p.xv = 0;
-                p.yv = 0;
-            }
-
-            p.xv *= 0.5;
-            p.yv *= 0.5;
-            if (Math.abs(p.xv) < 1e-6) p.xv = 0;
-            if (Math.abs(p.yv) < 1e-6) p.yv = 0;
+        window.removeEventListener("resize", resize);
+        if (container) {
+            container.removeEventListener("pointermove", onMove);
+            container.removeEventListener("pointerleave", onLeave);
         }
     }
 
-    function draw() {
-        draw_frame();
-        raf = visible ? requestAnimationFrame(draw) : 0;
-    }
-
-    function draw_frame() {
-        var mouse_xv = mouse.x - mouse.px;
-        var mouse_yv = mouse.y - mouse.py;
-        // Clamp so a fling-scroll can't blow up the simulation.
-        var scroll_yv = Math.max(-8, Math.min(8, (scroll.y - scroll.py) * 0.19));
-
-        for (let i = 0; i < vec_cells.length; i++) {
-            var cell_datas = vec_cells[i];
-            for (let j = 0; j < cell_datas.length; j++) {
-                var cell_data = cell_datas[j];
-                // A stationary pointer adds nothing; skip the per-cell distance test.
-                if (mouse.down && (mouse_xv !== 0 || mouse_yv !== 0)) {
-                    change_cell_velocity(
-                        cell_data,
-                        mouse_xv,
-                        mouse_yv,
-                        pen_size,
-                    );
-                }
-
-                // Apply scroll velocity to create wave effect
-                if (Math.abs(scroll_yv) > 0.01) {
-                    // Create horizontal wave pattern based on cell position
-                    var wave_offset = Math.sin((cell_data.x / canvas_width) * Math.PI * 2 + scroll.y * 0.01) * 0.5;
-                    cell_data.xv += wave_offset * scroll_yv;
-                    cell_data.yv += scroll_yv;
-                }
-
-                update_pressure(cell_data);
-            }
-        }
-
-        // clears the canvas every time a new frame is drawn so the particles can move
-        ctx.clearRect(0, 0, canvas_width, canvas_height);
-        ctx.strokeStyle = "#98b1eb";
-        ctx.beginPath();
-        update_particle();
-        ctx.stroke();
-
-        // updates the cell velocity for every cell
-        for (let i = 0; i < vec_cells.length; i++) {
-            cell_datas = vec_cells[i];
-
-            for (let j = 0; j < cell_datas.length; j++) {
-                cell_data = cell_datas[j];
-                update_velocity(cell_data);
-            }
-        }
-
-        mouse.px = mouse.x;
-        mouse.py = mouse.y;
-        scroll.py = scroll.y;
-    }
-
-    function change_cell_velocity(cell_data, mvelX, mvelY, pen_size) {
-        var dx = cell_data.x - mouse.x;
-        var dy = cell_data.y - mouse.y;
-        var dist = Math.sqrt(dy * dy + dx * dx);
-
-        // if the distance is less than the radius..
-        if (dist < pen_size) {
-            // if the distance is very small, set it to pen_size
-            if (dist < 4) {
-                dist = pen_size;
-            }
-
-            var power = pen_size / dist;
-            cell_data.xv += mvelX * power;
-            cell_data.yv += mvelY * power;
-        }
-    }
-
-    function update_pressure(cell_data) {
-        // calculates the collective pressure on the X axis by summing the surrounding velocities
-        var pressure_x =
-            cell_data.up_left.xv * 0.5 + // divide in half because it's diagonal
-            cell_data.left.xv +
-            cell_data.down_left.xv * 0.5 -
-            cell_data.up_right.xv * 0.5 -
-            cell_data.right.xv -
-            cell_data.down_right.xv * 0.5;
-
-        var pressure_y =
-            cell_data.up_left.yv * 0.5 + // divide in half because it's diagonal
-            cell_data.up.yv +
-            cell_data.up_right.yv * 0.5 -
-            cell_data.down_left.yv * 0.5 -
-            cell_data.down.yv -
-            cell_data.down_right.yv * 0.5;
-
-        cell_data.pressure = (pressure_x + pressure_y) * 0.25;
-    }
-
-    function update_velocity(cell_data) {
-        cell_data.xv +=
-            (cell_data.up_left.pressure * 0.5 +
-                cell_data.left.pressure +
-                cell_data.down_left.pressure * 0.5 -
-                cell_data.up_right.pressure * 0.5 -
-                cell_data.right.pressure -
-                cell_data.down_right.pressure * 0.5) *
-            0.25;
-
-        cell_data.yv +=
-            (cell_data.up_left.pressure * 0.5 +
-                cell_data.up.pressure +
-                cell_data.up_right.pressure * 0.5 -
-                cell_data.down_left.pressure * 0.5 -
-                cell_data.down.pressure -
-                cell_data.down_right.pressure * 0.5) *
-            0.25;
-
-        // this slowly decreases the cell's velocity over time so that the fluid stops it it's left alone
-        cell_data.xv *= 0.99;
-        cell_data.yv *= 0.99;
-
-        // Snap negligible motion to exactly zero. Otherwise an idle fluid decays into
-        // subnormal floats (~1e-322) that never reach zero, and subnormal math is
-        // very slow on many x86 CPUs: the page gets slower the longer it sits idle.
-        if (Math.abs(cell_data.xv) < 1e-6) cell_data.xv = 0;
-        if (Math.abs(cell_data.yv) < 1e-6) cell_data.yv = 0;
-    }
-
-    function cell(x, y, res) {
-        this.x = x;
-        this.y = y;
-
-        this.r = res;
-
-        this.col = 0;
-        this.row = 0;
-
-        this.xv = 0;
-        this.yv = 0;
-
-        this.pressure = 0;
-    }
-
-    function particle(x, y) {
-        this.x = this.px = x;
-        this.y = this.py = y;
-        this.xv = this.yv = 0;
-    }
-
-    function set_pointer(x, y, reset) {
-        var rect = canvas.getBoundingClientRect();
-        if (reset) {
-            mouse.px = x - rect.left;
-            mouse.py = y - rect.top;
-        } else {
-            mouse.px = mouse.x;
-            mouse.py = mouse.y;
-        }
-        mouse.x = x - rect.left;
-        mouse.y = y - rect.top;
-    }
-
-    function mouse_up_handler() {
-        mouse.down = false;
-    }
-
-    function mouse_move_handler(e) {
-        set_pointer(e.clientX, e.clientY, !mouse.down);
-        mouse.down = true; // hovering stirs the fluid
-    }
-
-    function touch_start_handler(e) {
-        set_pointer(e.touches[0].clientX, e.touches[0].clientY, true);
-        mouse.down = true;
-    }
-
-    function touch_move_handler(e) {
-        set_pointer(e.touches[0].clientX, e.touches[0].clientY, false);
-    }
-
-    function touch_end_handler(e) {
-        if (!e.touches.length) mouse.down = false;
-    }
-
-    function scroll_handler(e) {
-        scroll.py = scroll.y;
-        scroll.y = window.scrollY || window.pageYOffset;
-    }
-
-    onMount(() => {
-        reduced_motion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    onMount(function () {
+        reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         init();
         return teardown;
     });
@@ -475,7 +175,6 @@
         <p class="tagline">{profile.tagline}</p>
         <div class="cta">
             <a class="btn primary" href="#work">See my work</a>
-            <a class="btn" href={profile.resume} target="_blank" rel="noopener">Résumé</a>
             <a class="btn" href="#contact">Get in touch</a>
         </div>
     </div>
@@ -501,7 +200,7 @@
         inset: 0;
         width: 100%;
         height: 100%;
-        /* Vertical scrolling and pinch-zoom stay with the browser; drags still stir the fluid. */
+        /* Let vertical scrolling and pinch-zoom stay with the browser. */
         touch-action: pan-y pinch-zoom;
     }
 

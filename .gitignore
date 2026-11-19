@@ -7,6 +7,8 @@ node_modules
 .wrangler
 /.svelte-kit
 /build
+/yarn.lock
+/package-lock.json
 
 # OS
 .DS_Store

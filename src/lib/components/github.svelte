@@ -25,7 +25,7 @@
 </script>
 
 <section id="work" class="section">
-    <h2 class="section-title"><span class="num">04.</span> Open source</h2>
+    <h2 class="section-title">Open source</h2>
     <ul class="projects">
         {#each featured as p}
             {@const count = stars[p.repo.toLowerCase()]}

@@ -4,7 +4,7 @@
 
     const links = [
         { href: "#about", label: "About" },
-        { href: "#experience", label: "Experience" },
+        { href: "#skillsets", label: "SkillSets" },
         { href: "#pipeline", label: "AI Workflow" },
         { href: "#work", label: "Work" },
         { href: "#contact", label: "Contact" },
@@ -37,7 +37,7 @@
 
 <nav bind:this={nav} class:scrolled class:open aria-label="Main">
     <div class="inner">
-        <a class="logo" href="#hero" onclick={() => (open = false)}>BG<span>_</span></a>
+        <a class="logo" href="#hero" onclick={() => (open = false)}>XazepysK<span>_</span></a>
         <button
             class="toggle"
             aria-label="Toggle menu"
@@ -51,9 +51,6 @@
             {#each links as link}
                 <li><a href={link.href} onclick={() => (open = false)}>{link.label}</a></li>
             {/each}
-            <li>
-                <a class="resume" href={profile.resume} target="_blank" rel="noopener" onclick={() => (open = false)}>Résumé</a>
-            </li>
         </ul>
     </div>
 </nav>
@@ -121,28 +118,6 @@
         color: var(--muted);
         font-size: 0.92rem;
         transition: color 0.2s;
-    }
-
-    ul a:hover {
-        color: var(--fg);
-    }
-
-    .resume {
-        border: 1px solid var(--accent);
-        color: var(--accent) !important;
-        position: relative;
-        display: inline-block;
-        min-height: 0;
-        line-height: 1.25;
-        padding: 0.35rem 0.9rem;
-        border-radius: 999px;
-    }
-
-    /* Invisible 44px-tall hit area around the pill. */
-    .resume::after {
-        content: "";
-        position: absolute;
-        inset: -8px 0;
     }
 
     .toggle {
@@ -218,14 +193,6 @@
             padding: 0.8rem 0;
             font-size: 1.05rem;
         }
-
-        .resume {
-            display: inline-flex !important;
-            min-height: 44px;
-            line-height: inherit;
-            padding: 0.35rem 1.1rem;
-            margin-top: 0.5rem;
-        }
     }
 
     /* Landscape phones: two columns so the whole menu fits without scrolling. */
@@ -238,10 +205,6 @@
 
         ul a {
             padding: 0.4rem 0;
-        }
-
-        .resume {
-            margin-top: 0;
         }
     }
 
