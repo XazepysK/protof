@@ -10,7 +10,7 @@
 <section id="contact" class="section contact">
     <h2 class="section-title">Contact</h2>
     <div class="cta">
-        <p class="big">Have a role, a project, or a CTF team that needs another player?</p>
+        <p class="big">Have a role or project that needs another player?</p>
         <p>My inbox is open. I usually reply within a day or two.</p>
         <a class="btn primary" href="mailto:{profile.email}"><Fa icon={faEnvelope} /> Say hello</a>
         <div class="socials">
